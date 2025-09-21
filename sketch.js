@@ -18,7 +18,7 @@ const RENDER_MODE = {
 };
 
 // Текущий режим отрисовки (изменить здесь для переключения)
-const CURRENT_RENDER_MODE = RENDER_MODE.PHOTOREALISTIC;
+const CURRENT_RENDER_MODE = RENDER_MODE.DETAILED;
 
 // Структура скелета
 class Skeleton {
@@ -434,42 +434,71 @@ class Skeleton {
         pop();
     }
     
-    // Детализированное платье
+    // Детализированное платье (белое, как на фото)
     drawDetailedDress(joints) {
-        // Основное платье с градиентом
-        fill(150, 40, 100);
+        // Основное платье - белое
+        fill(255, 255, 255);
         noStroke();
         
-        // Талия (узкая часть)
+        // Талия (узкая часть) - А-силуэт
         let waistY = joints.pelvis.y + (joints.spineEnd.y - joints.pelvis.y) * 0.3;
         let waistX = joints.pelvis.x + (joints.spineEnd.x - joints.pelvis.x) * 0.3;
-        ellipse(waistX, waistY, 28, 40);
+        ellipse(waistX, waistY, 24, 36);
         
-        // Верх платья
+        // Верх платья (грудь)
         let chestY = joints.pelvis.y + (joints.spineEnd.y - joints.pelvis.y) * 0.6;
         let chestX = joints.pelvis.x + (joints.spineEnd.x - joints.pelvis.x) * 0.6;
-        ellipse(chestX, chestY, 38, 50);
+        ellipse(chestX, chestY, 36, 48);
         
-        // Юбка с складками
-        let skirtY = (waistY + Math.min(joints.leftKnee.y, joints.rightKnee.y)) / 2;
+        // Юбка А-силуэт (расширяется к низу)
+        let thighLength = Math.abs(joints.leftKnee.y - joints.pelvis.y);
+        let dressEndY = joints.pelvis.y + thighLength * 0.7; // 70% бедра
+        let skirtY = (waistY + dressEndY) / 2;
         let skirtX = waistX;
-        let skirtHeight = Math.min(joints.leftKnee.y, joints.rightKnee.y) - waistY - 15;
-        ellipse(skirtX, skirtY, 55, skirtHeight);
         
-        // Складки на юбке
-        fill(130, 30, 80);
-        for (let i = 0; i < 3; i++) {
-            let foldX = skirtX + (i - 1) * 8;
-            ellipse(foldX, skirtY, 45, skirtHeight - 5);
+        // Юбка с расширением (трапеция)
+        let topSkirtWidth = 32;
+        let bottomSkirtWidth = 60;
+        
+        // Рисуем юбку как трапецию
+        beginShape();
+        vertex(skirtX - topSkirtWidth/2, waistY);
+        vertex(skirtX + topSkirtWidth/2, waistY);
+        vertex(skirtX + bottomSkirtWidth/2, dressEndY);
+        vertex(skirtX - bottomSkirtWidth/2, dressEndY);
+        endShape(CLOSE);
+        
+        // Складки на юбке (тени)
+        fill(240, 240, 240);
+        for (let i = 0; i < 5; i++) {
+            let foldX = skirtX + (i - 2) * 6;
+            let foldTopWidth = topSkirtWidth - 4;
+            let foldBottomWidth = bottomSkirtWidth - 8;
+            
+            beginShape();
+            vertex(foldX - foldTopWidth/2, waistY + 5);
+            vertex(foldX + foldTopWidth/2, waistY + 5);
+            vertex(foldX + foldBottomWidth/2, dressEndY - 5);
+            vertex(foldX - foldBottomWidth/2, dressEndY - 5);
+            endShape(CLOSE);
         }
         
-        // Вырез с деталями
-        fill(170, 60, 120);
-        ellipse(chestX, chestY - 10, 22, 18);
+        // Вырез (V-образный)
+        fill(245, 245, 245);
+        beginShape();
+        vertex(chestX - 12, chestY - 8);
+        vertex(chestX + 12, chestY - 8);
+        vertex(chestX, chestY - 15);
+        endShape(CLOSE);
         
-        // Пояс
-        fill(100, 20, 60);
-        ellipse(waistX, waistY, 30, 8);
+        // Рукава (короткие)
+        fill(255, 255, 255);
+        ellipse(chestX - 20, chestY + 5, 16, 25);
+        ellipse(chestX + 20, chestY + 5, 16, 25);
+        
+        // Талия (подчеркнута)
+        fill(250, 250, 250);
+        ellipse(waistX, waistY, 26, 8);
     }
     
     // Детализированное тело
@@ -497,19 +526,26 @@ class Skeleton {
         line(joints.spineEnd.x + 2, joints.spineEnd.y, joints.head.x + 2, joints.head.y);
     }
     
-    // Детализированная рука
+    // Детализированная рука (правильные пропорции)
     drawDetailedArm(shoulderStart, shoulder, elbow, hand, side) {
         fill(255, 220, 180);
         noStroke();
         
-        // Плечо с объемом
-        ellipse(shoulder.x, shoulder.y, 14, 28);
+        // Плечо: длина ≈ 1.3× головы, ширина ≈ 0.3× головы
+        let headSize = 40; // примерный размер головы
+        let shoulderLength = headSize * 1.3;
+        let shoulderWidth = headSize * 0.3;
+        ellipse(shoulder.x, shoulder.y, shoulderWidth, shoulderLength);
         
-        // Предплечье с объемом
-        ellipse(elbow.x, elbow.y, 12, 22);
+        // Предплечье: длина ≈ 1.1× головы, ширина ≈ 0.25× головы
+        let forearmLength = headSize * 1.1;
+        let forearmWidth = headSize * 0.25;
+        ellipse(elbow.x, elbow.y, forearmWidth, forearmLength);
         
-        // Кисть с деталями
-        ellipse(hand.x, hand.y, 10, 14);
+        // Кисть: длина ≈ 0.4× головы, ширина ≈ 0.2× головы
+        let handLength = headSize * 0.4;
+        let handWidth = headSize * 0.2;
+        ellipse(hand.x, hand.y, handWidth, handLength);
         
         // Соединения с градиентом
         strokeWeight(4);
@@ -525,26 +561,62 @@ class Skeleton {
         line(elbow.x + side * 2, elbow.y, hand.x + side * 2, hand.y);
     }
     
-    // Детализированная нога
+    // Детализированная нога (неравномерная ширина + кеды)
     drawDetailedLeg(knee, foot, side) {
+        let headSize = 40; // примерный размер головы
+        
+        // Голень с неравномерной шириной
+        // Ширина вверху ≈ 0.25× головы, внизу ≈ 0.2× головы
+        let calfTopWidth = headSize * 0.25;
+        let calfBottomWidth = headSize * 0.2;
+        let calfLength = headSize * 1.2;
+        
+        // Рисуем голень как трапецию
         fill(255, 220, 180);
         noStroke();
-        
-        // Голень с объемом
-        ellipse(knee.x, knee.y, 18, 38);
-        
-        // Ступня с деталями
-        ellipse(foot.x + side * 10, foot.y, 22, 14);
+        beginShape();
+        vertex(knee.x - calfTopWidth/2, knee.y);
+        vertex(knee.x + calfTopWidth/2, knee.y);
+        vertex(foot.x + calfBottomWidth/2, foot.y - 15);
+        vertex(foot.x - calfBottomWidth/2, foot.y - 15);
+        endShape(CLOSE);
         
         // Соединение с градиентом
         strokeWeight(5);
         stroke(255, 220, 180);
-        line(knee.x, knee.y, foot.x, foot.y);
+        line(knee.x, knee.y, foot.x, foot.y - 15);
         
         // Тень на ноге
         strokeWeight(3);
         stroke(255, 200, 160);
-        line(knee.x + side * 2, knee.y, foot.x + side * 2, foot.y);
+        line(knee.x + side * 2, knee.y, foot.x + side * 2, foot.y - 15);
+        
+        // Кеды (белые)
+        fill(255, 255, 255);
+        noStroke();
+        
+        // Основная часть кеда
+        ellipse(foot.x + side * 8, foot.y, headSize * 0.8, headSize * 0.3);
+        
+        // Подошва кеда (темнее)
+        fill(200, 200, 200);
+        ellipse(foot.x + side * 8, foot.y + 8, headSize * 0.8, headSize * 0.15);
+        
+        // Шнурки
+        stroke(0);
+        strokeWeight(1);
+        for (let i = 0; i < 3; i++) {
+            let laceX = foot.x + side * 8 + (i - 1) * 4;
+            line(laceX, foot.y - 6, laceX, foot.y + 4);
+        }
+        
+        // Металлические люверсы
+        fill(150, 150, 150);
+        noStroke();
+        for (let i = 0; i < 6; i++) {
+            let eyeletX = foot.x + side * 8 + (i - 2.5) * 3;
+            circle(eyeletX, foot.y - 2, 2);
+        }
     }
     
     // Детализированная голова
@@ -564,16 +636,20 @@ class Skeleton {
         ellipse(joints.head.x + 10, joints.head.y + 5, 8, 6);
     }
     
-    // Детализированные волосы
+    // Детализированные волосы (начинаются выше глаз)
     drawDetailedHair(joints) {
         fill(60, 40, 20);
         noStroke();
         
-        // Основные волосы с объемом
-        ellipse(joints.head.x, joints.head.y - 8, 38, 48);
+        // Основные волосы с объемом (начинаются выше глаз)
+        // Глаза на уровне 1/3 от верха головы, волосы начинаются выше
+        let eyesY = joints.head.y - 20; // глаза примерно здесь
+        let hairStartY = eyesY - 10; // волосы начинаются выше глаз
         
-        // Челка с деталями
-        ellipse(joints.head.x, joints.head.y - 12, 28, 15);
+        ellipse(joints.head.x, hairStartY - 8, 38, 48);
+        
+        // Челка с деталями (выше глаз)
+        ellipse(joints.head.x, hairStartY - 12, 28, 15);
         
         // Длинные пряди с деталями
         stroke(60, 40, 20);
@@ -582,94 +658,108 @@ class Skeleton {
         
         // Левая прядь с изгибами
         beginShape();
-        vertex(joints.head.x - 16, joints.head.y - 5);
-        quadraticVertex(joints.head.x - 22, joints.head.y + 8, joints.head.x - 14, joints.head.y + 20);
-        quadraticVertex(joints.head.x - 10, joints.head.y + 30, joints.head.x - 8, joints.head.y + 25);
+        vertex(joints.head.x - 16, hairStartY - 5);
+        quadraticVertex(joints.head.x - 22, hairStartY + 8, joints.head.x - 14, hairStartY + 20);
+        quadraticVertex(joints.head.x - 10, hairStartY + 30, joints.head.x - 8, hairStartY + 25);
         endShape();
         
         // Правая прядь с изгибами
         beginShape();
-        vertex(joints.head.x + 16, joints.head.y - 5);
-        quadraticVertex(joints.head.x + 22, joints.head.y + 8, joints.head.x + 14, joints.head.y + 20);
-        quadraticVertex(joints.head.x + 10, joints.head.y + 30, joints.head.x + 8, joints.head.y + 25);
+        vertex(joints.head.x + 16, hairStartY - 5);
+        quadraticVertex(joints.head.x + 22, hairStartY + 8, joints.head.x + 14, hairStartY + 20);
+        quadraticVertex(joints.head.x + 10, hairStartY + 30, joints.head.x + 8, hairStartY + 25);
         endShape();
         
         // Дополнительные пряди
         strokeWeight(2);
         for (let i = 0; i < 3; i++) {
             let x = joints.head.x - 12 + i * 12;
-            let y = joints.head.y + 15 + i * 5;
-            line(x, joints.head.y - 3, x - 3, y);
-            line(x, joints.head.y - 3, x + 3, y);
+            let y = hairStartY + 15 + i * 5;
+            line(x, hairStartY - 3, x - 3, y);
+            line(x, hairStartY - 3, x + 3, y);
+        }
+        
+        // Верхние пряди (над головой)
+        strokeWeight(3);
+        for (let i = 0; i < 5; i++) {
+            let x = joints.head.x - 16 + i * 8;
+            let startY = hairStartY - 15;
+            let endY = hairStartY - 8;
+            line(x, startY, x + (i - 2) * 2, endY);
         }
     }
     
-    // Детализированное лицо
+    // Детализированное лицо (правильное расположение глаз)
     drawDetailedFace(joints) {
+        // Правильное расположение черт лица
+        let eyesY = joints.head.y - 20; // глаза на уровне 1/3 от верха головы
+        let noseY = joints.head.y - 10; // нос на уровне 1/2 высоты головы
+        let mouthY = joints.head.y + 5; // рот на уровне 2/3 высоты головы
+        
         // Глаза с деталями
         fill(255);
         noStroke();
-        ellipse(joints.head.x - 8, joints.head.y - 5, 10, 8);
-        ellipse(joints.head.x + 8, joints.head.y - 5, 10, 8);
+        ellipse(joints.head.x - 8, eyesY, 10, 8);
+        ellipse(joints.head.x + 8, eyesY, 10, 8);
         
         // Карие глаза с градиентом
         fill(139, 69, 19);
-        ellipse(joints.head.x - 8, joints.head.y - 5, 7, 5);
-        ellipse(joints.head.x + 8, joints.head.y - 5, 7, 5);
+        ellipse(joints.head.x - 8, eyesY, 7, 5);
+        ellipse(joints.head.x + 8, eyesY, 7, 5);
         
         // Внутренняя часть глаз
         fill(160, 80, 40);
-        ellipse(joints.head.x - 8, joints.head.y - 5, 5, 4);
-        ellipse(joints.head.x + 8, joints.head.y - 5, 5, 4);
+        ellipse(joints.head.x - 8, eyesY, 5, 4);
+        ellipse(joints.head.x + 8, eyesY, 5, 4);
         
         // Зрачки
         fill(0);
-        ellipse(joints.head.x - 8, joints.head.y - 5, 3, 3);
-        ellipse(joints.head.x + 8, joints.head.y - 5, 3, 3);
+        ellipse(joints.head.x - 8, eyesY, 3, 3);
+        ellipse(joints.head.x + 8, eyesY, 3, 3);
         
         // Блики
         fill(255);
-        ellipse(joints.head.x - 7.5, joints.head.y - 5.5, 1.5, 1.5);
-        ellipse(joints.head.x + 7.5, joints.head.y - 5.5, 1.5, 1.5);
+        ellipse(joints.head.x - 7.5, eyesY - 0.5, 1.5, 1.5);
+        ellipse(joints.head.x + 7.5, eyesY - 0.5, 1.5, 1.5);
         
         // Дополнительный блик
         fill(255, 255, 255, 150);
-        ellipse(joints.head.x - 8.5, joints.head.y - 6, 1, 1);
-        ellipse(joints.head.x + 7.5, joints.head.y - 6, 1, 1);
+        ellipse(joints.head.x - 8.5, eyesY - 1, 1, 1);
+        ellipse(joints.head.x + 7.5, eyesY - 1, 1, 1);
         
-        // Брови с деталями
+        // Брови с деталями (выше глаз)
         stroke(60, 40, 20);
         strokeWeight(3);
         noFill();
-        arc(joints.head.x - 8, joints.head.y - 8, 12, 4, PI, 0);
-        arc(joints.head.x + 8, joints.head.y - 8, 12, 4, PI, 0);
+        arc(joints.head.x - 8, eyesY - 3, 12, 4, PI, 0);
+        arc(joints.head.x + 8, eyesY - 3, 12, 4, PI, 0);
         
         // Нос с объемом
         strokeWeight(2);
         stroke(255, 200, 160);
-        line(joints.head.x, joints.head.y - 2, joints.head.x, joints.head.y + 4);
+        line(joints.head.x, noseY - 2, joints.head.x, noseY + 4);
         
         // Тень от носа
         strokeWeight(1);
         stroke(255, 180, 140, 100);
-        line(joints.head.x + 1, joints.head.y - 1, joints.head.x + 1, joints.head.y + 2);
+        line(joints.head.x + 1, noseY - 1, joints.head.x + 1, noseY + 2);
         
         // Рот с деталями
         strokeWeight(3);
         stroke(255, 180, 180);
         noFill();
-        arc(joints.head.x, joints.head.y + 8, 10, 5, 0, PI);
+        arc(joints.head.x, mouthY, 10, 5, 0, PI);
         
         // Внутренняя часть рта
         fill(200, 100, 100);
         noStroke();
-        arc(joints.head.x, joints.head.y + 8, 8, 3, 0, PI);
+        arc(joints.head.x, mouthY, 8, 3, 0, PI);
         
         // Губы
         strokeWeight(2);
         stroke(255, 160, 160);
         noFill();
-        arc(joints.head.x, joints.head.y + 8, 10, 5, 0, PI);
+        arc(joints.head.x, mouthY, 10, 5, 0, PI);
     }
     
     // Фотореалистичная отрисовка (переименованная существующая)
