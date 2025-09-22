@@ -59,7 +59,10 @@ class Skeleton {
             leftUpperArmAngle: 90,   // левая рука вниз
             rightUpperArmAngle: -90, // правая рука вниз
             leftForearmAngle: 0,     // левое предплечье продолжает руку
-            rightForearmAngle: 0     // правое предплечье продолжает руку
+            rightForearmAngle: 0,    // правое предплечье продолжает руку
+
+            // Шея: поворот относительно туловища
+            neckAngle: 0             // шея прямо (0° относительно позвоночника)
         };
 
         // Пересчитываем позицию таза для правильного касания пола
@@ -140,10 +143,10 @@ class Skeleton {
             y: rightKnee.y + sin(this.toRadians(s.rightShinAngle + s.rightThighAngle + s.spineAngle)) * b.shin
         };
 
-        // Голова
+        // Голова (с учетом поворота шеи относительно туловища)
         const head = {
-            x: spineEnd.x + cos(this.toRadians(s.spineAngle)) * b.neck,
-            y: spineEnd.y + sin(this.toRadians(s.spineAngle)) * b.neck
+            x: spineEnd.x + cos(this.toRadians(s.spineAngle + s.neckAngle)) * b.neck,
+            y: spineEnd.y + sin(this.toRadians(s.spineAngle + s.neckAngle)) * b.neck
         };
 
         return {
@@ -275,7 +278,10 @@ class Skeleton {
             leftUpperArmAngle: 90,
             rightUpperArmAngle: -90,
             leftForearmAngle: 0,
-            rightForearmAngle: 0
+            rightForearmAngle: 0,
+
+            // Шея прямо
+            neckAngle: 0
         };
     }
 }
@@ -445,6 +451,9 @@ function drawDebugInfo() {
     text(`rightForearmAngle: ${Math.round(state.rightForearmAngle)}`, x, y);
     y += lineHeight;
 
+    text(`neckAngle: ${Math.round(state.neckAngle)}`, x, y);
+    y += lineHeight;
+
     // Инструкция
     y += lineHeight;
     text('Нажмите W для выключения', x, y);
@@ -530,16 +539,16 @@ function handleKeyDown(event) {
             skeleton.state.spineAngle += angleSpeed;
             break;
 
-        case 't':
-            // Голова вправо
+        case '[':
+            // Шея влево
             event.preventDefault();
-            // Голова поворачивается вместе с туловищем, но можно добавить отдельный угол
+            skeleton.state.neckAngle -= angleSpeed;
             break;
 
-        case 'y':
-            // Голова влево
+        case ']':
+            // Шея вправо
             event.preventDefault();
-            // Голова поворачивается вместе с туловищем, но можно добавить отдельный угол
+            skeleton.state.neckAngle += angleSpeed;
             break;
 
         case 'e':
