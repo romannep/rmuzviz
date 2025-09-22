@@ -531,12 +531,18 @@ function handleKeyDown(event) {
             // Туловище наклон вправо
             event.preventDefault();
             skeleton.state.spineAngle -= angleSpeed;
+            // Компенсируем поворот ног, чтобы они остались на месте
+            skeleton.state.leftThighAngle += angleSpeed;
+            skeleton.state.rightThighAngle += angleSpeed;
             break;
 
         case 'h':
             // Туловище наклон влево
             event.preventDefault();
             skeleton.state.spineAngle += angleSpeed;
+            // Компенсируем поворот ног, чтобы они остались на месте
+            skeleton.state.leftThighAngle -= angleSpeed;
+            skeleton.state.rightThighAngle -= angleSpeed;
             break;
 
         case '[':
