@@ -1354,65 +1354,9 @@ function draw() {
     
     // Отображаем отладочную информацию
     drawDebugInfo();
-    
-    // Обработка управления
-    handleMovement();
 }
 
-function handleMovement() {
-    const speed = 2; // Скорость движения
-    const angleSpeed = 3; // Скорость поворота
-    
-    // Движение таза
-    if (keyIsDown(87)) { // W - вперед
-        skeleton.state.pelvisY -= speed;
-    }
-    if (keyIsDown(83)) { // S - назад
-        skeleton.state.pelvisY += speed;
-    }
-    if (keyIsDown(65)) { // A - влево
-        skeleton.state.pelvisX -= speed;
-    }
-    if (keyIsDown(68)) { // D - вправо
-        skeleton.state.pelvisX += speed;
-    }
-    
-    // Поворот туловища
-    if (keyIsDown(81)) { // Q - поворот влево
-        skeleton.state.spineAngle -= angleSpeed;
-    }
-    if (keyIsDown(69)) { // E - поворот вправо
-        skeleton.state.spineAngle += angleSpeed;
-    }
-    
-    // Движения рук
-    if (keyIsDown(UP_ARROW)) {
-        skeleton.state.leftUpperArmAngle -= angleSpeed;
-    }
-    if (keyIsDown(DOWN_ARROW)) {
-        skeleton.state.leftUpperArmAngle += angleSpeed;
-    }
-    if (keyIsDown(LEFT_ARROW)) {
-        skeleton.state.rightUpperArmAngle -= angleSpeed;
-    }
-    if (keyIsDown(RIGHT_ARROW)) {
-        skeleton.state.rightUpperArmAngle += angleSpeed;
-    }
-    
-    // Движения ног
-    if (keyIsDown(73)) { // I - левая нога вперед
-        skeleton.state.leftThighAngle -= angleSpeed;
-    }
-    if (keyIsDown(75)) { // K - левая нога назад
-        skeleton.state.leftThighAngle += angleSpeed;
-    }
-    if (keyIsDown(74)) { // J - правая нога вперед
-        skeleton.state.rightThighAngle -= angleSpeed;
-    }
-    if (keyIsDown(76)) { // L - правая нога назад
-        skeleton.state.rightThighAngle += angleSpeed;
-    }
-}
+// Новая система управления согласно task.md
 
 function resetSkeleton() {
     skeleton.reset();
@@ -1501,17 +1445,128 @@ function drawDebugInfo() {
     pop();
 }
 
-// Обработчик клавиатуры для полноэкранного режима и отладки
+// Обработчик клавиатуры для управления танцем и интерфейсом
 function handleKeyDown(event) {
+    const angleSpeed = 3; // Скорость поворота
+    
+    // Управление танцем
+    switch (event.key.toLowerCase()) {
+        case 'q':
+            // Сброс до начального состояния
+            event.preventDefault();
+            skeleton.reset();
+            break;
+            
+        case 'w':
+            // Включение режима отладки
+            event.preventDefault();
+            toggleDebugMode();
+            break;
+            
+        case 'c':
+            // Правая голень наружу
+            event.preventDefault();
+            skeleton.state.rightShinAngle += angleSpeed;
+            break;
+            
+        case 'v':
+            // Правая голень внутрь
+            event.preventDefault();
+            skeleton.state.rightShinAngle -= angleSpeed;
+            break;
+            
+        case 'n':
+            // Левая голень внутрь
+            event.preventDefault();
+            skeleton.state.leftShinAngle -= angleSpeed;
+            break;
+            
+        case 'm':
+            // Левая голень наружу
+            event.preventDefault();
+            skeleton.state.leftShinAngle += angleSpeed;
+            break;
+            
+        case 'd':
+            // Правое бедро наружу
+            event.preventDefault();
+            skeleton.state.rightThighAngle += angleSpeed;
+            break;
+            
+        case 'f':
+            // Правое бедро внутрь
+            event.preventDefault();
+            skeleton.state.rightThighAngle -= angleSpeed;
+            break;
+            
+        case 'j':
+            // Левое бедро внутрь
+            event.preventDefault();
+            skeleton.state.leftThighAngle -= angleSpeed;
+            break;
+            
+        case 'k':
+            // Левое бедро наружу
+            event.preventDefault();
+            skeleton.state.leftThighAngle += angleSpeed;
+            break;
+            
+        case 'g':
+            // Туловище наклон вправо
+            event.preventDefault();
+            skeleton.state.spineAngle += angleSpeed;
+            break;
+            
+        case 'h':
+            // Туловище наклон влево
+            event.preventDefault();
+            skeleton.state.spineAngle -= angleSpeed;
+            break;
+            
+        case 't':
+            // Голова вправо
+            event.preventDefault();
+            // Голова поворачивается вместе с туловищем, но можно добавить отдельный угол
+            break;
+            
+        case 'y':
+            // Голова влево
+            event.preventDefault();
+            // Голова поворачивается вместе с туловищем, но можно добавить отдельный угол
+            break;
+            
+        case 'e':
+            // Правое плечо вниз
+            event.preventDefault();
+            skeleton.state.rightUpperArmAngle += angleSpeed;
+            break;
+            
+        case 'r':
+            // Правое плечо вверх
+            event.preventDefault();
+            skeleton.state.rightUpperArmAngle -= angleSpeed;
+            break;
+            
+        case 'u':
+            // Левое плечо вверх
+            event.preventDefault();
+            skeleton.state.leftUpperArmAngle -= angleSpeed;
+            break;
+            
+        case 'i':
+            // Левое плечо вниз
+            event.preventDefault();
+            skeleton.state.leftUpperArmAngle += angleSpeed;
+            break;
+    }
+    
+    // Управление интерфейсом
     if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
         toggleFullscreen();
     } else if (event.key === 'Escape' && isFullscreen) {
         event.preventDefault();
         exitFullscreen();
-    } else if (event.key === 'w' || event.key === 'W') {
-        event.preventDefault();
-        toggleDebugMode();
     }
 }
 
