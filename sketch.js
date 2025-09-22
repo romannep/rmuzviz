@@ -3,6 +3,7 @@
 
 let isFullscreen = false;
 let isPaused = false;
+let isDebugMode = false;
 
 // Размеры canvas
 const CANVAS_WIDTH = 800;
@@ -1351,6 +1352,9 @@ function draw() {
     // Рисуем скелет
     skeleton.draw();
     
+    // Отображаем отладочную информацию
+    drawDebugInfo();
+    
     // Обработка управления
     handleMovement();
 }
@@ -1420,7 +1424,84 @@ function togglePause() {
     btn.textContent = isPaused ? 'Продолжить' : 'Пауза';
 }
 
-// Обработчик клавиатуры для полноэкранного режима
+// Переключение режима отладки
+function toggleDebugMode() {
+    isDebugMode = !isDebugMode;
+    console.log('Режим отладки:', isDebugMode ? 'включен' : 'выключен');
+}
+
+// Отображение отладочной информации
+function drawDebugInfo() {
+    if (!isDebugMode) return;
+    
+    push();
+    
+    // Настройки текста
+    textAlign(LEFT, TOP);
+    textSize(12);
+    fill(255, 255, 255);
+    stroke(0, 0, 0);
+    strokeWeight(1);
+    
+    // Позиция отображения (левый верхний угол)
+    let x = 10;
+    let y = 10;
+    let lineHeight = 16;
+    
+    // Заголовок
+    text('=== DEBUG MODE ===', x, y);
+    y += lineHeight * 1.5;
+    
+    // Отображаем все поля state с округлением до целого
+    const state = skeleton.state;
+    
+    text(`pelvisX: ${Math.round(state.pelvisX)}`, x, y);
+    y += lineHeight;
+    
+    text(`pelvisY: ${Math.round(state.pelvisY)}`, x, y);
+    y += lineHeight;
+    
+    text(`spineAngle: ${Math.round(state.spineAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`leftThighAngle: ${Math.round(state.leftThighAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`rightThighAngle: ${Math.round(state.rightThighAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`leftShinAngle: ${Math.round(state.leftShinAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`rightShinAngle: ${Math.round(state.rightShinAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`leftShoulderAngle: ${Math.round(state.leftShoulderAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`rightShoulderAngle: ${Math.round(state.rightShoulderAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`leftUpperArmAngle: ${Math.round(state.leftUpperArmAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`rightUpperArmAngle: ${Math.round(state.rightUpperArmAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`leftForearmAngle: ${Math.round(state.leftForearmAngle)}`, x, y);
+    y += lineHeight;
+    
+    text(`rightForearmAngle: ${Math.round(state.rightForearmAngle)}`, x, y);
+    y += lineHeight;
+    
+    // Инструкция
+    y += lineHeight;
+    text('Нажмите W для выключения', x, y);
+    
+    pop();
+}
+
+// Обработчик клавиатуры для полноэкранного режима и отладки
 function handleKeyDown(event) {
     if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
@@ -1428,6 +1509,9 @@ function handleKeyDown(event) {
     } else if (event.key === 'Escape' && isFullscreen) {
         event.preventDefault();
         exitFullscreen();
+    } else if (event.key === 'w' || event.key === 'W') {
+        event.preventDefault();
+        toggleDebugMode();
     }
 }
 
