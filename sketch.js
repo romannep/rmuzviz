@@ -19,7 +19,7 @@ const RENDER_MODE = {
 };
 
 // Текущий режим отрисовки (изменить здесь для переключения)
-const CURRENT_RENDER_MODE = RENDER_MODE.DETAILED;
+const CURRENT_RENDER_MODE = RENDER_MODE.SKELETON;
 
 // Структура скелета
 class Skeleton {
