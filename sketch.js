@@ -17,6 +17,12 @@ let isEditingMovement = false;      // Состояние редактирова
 let editingMovementIndex = -1;      // Индекс редактируемого движения (0-8)
 let baseState = null;               // Базовое состояние при начале редактирования
 
+// Режим танца
+let isDanceMode = false;            // Состояние режима танца
+let activeMovements = [];           // Массив активных движений с дельтами и временем
+let danceModeMessage = '';          // Сообщение о переключении режима
+let danceModeMessageTime = 0;       // Время показа сообщения
+
 // Размеры canvas
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -300,6 +306,37 @@ class Skeleton {
         };
     }
     
+    // Получение начального состояния
+    getInitialState() {
+        return {
+            // Позиция таза рассчитывается так, чтобы ступни касались пола
+            pelvisX: CANVAS_WIDTH / 2,
+            pelvisY: this.calculatePelvisPositionForFloorContact(),
+
+            // Туловище вертикально
+            spineAngle: -90,
+
+            // Ноги слегка в стороны для естественной позы
+            leftThighAngle: 160,
+            rightThighAngle: 200,
+            leftShinAngle: 0,
+            rightShinAngle: 0,
+
+            // Плечи горизонтально
+            leftShoulderAngle: 90,
+            rightShoulderAngle: -90,
+
+            // Руки вниз и слегка в стороны
+            leftUpperArmAngle: 90,
+            rightUpperArmAngle: -90,
+            leftForearmAngle: 0,
+            rightForearmAngle: 0,
+
+            // Шея прямо
+            neckAngle: 0
+        };
+    }
+    
     // Функция для расчета медианы массива чисел
     calculateMedian(numbers) {
         if (numbers.length === 0) return 0;
@@ -391,6 +428,11 @@ function draw() {
 
     // Проверяем таймаут измерения бита
     checkBeatMeasurementTimeout();
+    
+    // Обновляем активные движения в режиме танца
+    if (isDanceMode) {
+        updateActiveMovements();
+    }
 
     // Фон
     background(20, 20, 40);
@@ -411,6 +453,9 @@ function draw() {
     
     // Отображаем статус редактирования движения (всегда видимый)
     drawMovementStatus();
+    
+    // Отображаем сообщение о режиме танца
+    drawDanceModeMessage();
 }
 
 // Новая система управления согласно task.md
@@ -429,6 +474,127 @@ function togglePause() {
 function toggleDebugMode() {
     isDebugMode = !isDebugMode;
     console.log('Режим отладки:', isDebugMode ? 'включен' : 'выключен');
+}
+
+// Переключение режима танца
+function toggleDanceMode() {
+    isDanceMode = !isDanceMode;
+    
+    // Очищаем активные движения при переключении режима
+    activeMovements = [];
+    
+    // Устанавливаем сообщение и время его показа
+    danceModeMessage = isDanceMode ? 'Режим танца' : 'Режим обучения';
+    danceModeMessageTime = millis() + 1500; // Показываем 1.5 секунды
+    
+    console.log('Режим танца:', isDanceMode ? 'включен' : 'выключен');
+}
+
+// Запуск движения в режиме танца
+function startDanceMovement(movementIndex) {
+    if (movements[movementIndex] === null) {
+        console.log(`Движение ${movementIndex + 1} не найдено`);
+        return;
+    }
+    
+    const movement = movements[movementIndex];
+    const currentTime = millis();
+    const beatDuration = skeleton.beatDuration;
+    
+    // Создаем активное движение
+    const activeMovement = {
+        movementIndex: movementIndex,
+        delta: JSON.parse(JSON.stringify(movement)), // Копия дельты
+        startTime: currentTime,
+        phase1Duration: beatDuration * 0.4,  // 2/5 бита на изменение
+        phase2Duration: beatDuration * 0.2,  // 1/5 бита на удержание
+        phase3Duration: beatDuration * 0.4,  // 2/5 бита на возврат
+        totalDuration: beatDuration,         // Общая длительность = бит
+        currentPhase: 1,                     // Текущая фаза (1, 2, 3)
+        currentDelta: {}                     // Текущая дельта (изменяется со временем)
+    };
+    
+    // Инициализируем текущую дельту нулями
+    for (const key in movement) {
+        activeMovement.currentDelta[key] = 0;
+    }
+    
+    // Добавляем в массив активных движений
+    activeMovements.push(activeMovement);
+    
+    console.log(`Запущено движение ${movementIndex + 1} в режиме танца`);
+}
+
+// Обновление активных движений
+function updateActiveMovements() {
+    const currentTime = millis();
+    
+    // Обновляем каждое активное движение
+    for (let i = activeMovements.length - 1; i >= 0; i--) {
+        const activeMovement = activeMovements[i];
+        const elapsed = currentTime - activeMovement.startTime;
+        
+        // Проверяем, завершилось ли движение
+        if (elapsed >= activeMovement.totalDuration) {
+            activeMovements.splice(i, 1);
+            continue;
+        }
+        
+        // Обновляем текущую дельту в зависимости от фазы
+        updateMovementPhase(activeMovement, elapsed);
+    }
+    
+    // Пересчитываем состояние скелета
+    calculateDanceState();
+}
+
+// Обновление фазы движения
+function updateMovementPhase(activeMovement, elapsed) {
+    const { delta, phase1Duration, phase2Duration, phase3Duration } = activeMovement;
+    
+    if (elapsed < phase1Duration) {
+        // Фаза 1: изменение от 0 до полной дельты
+        activeMovement.currentPhase = 1;
+        const progress = elapsed / phase1Duration;
+        
+        for (const key in delta) {
+            activeMovement.currentDelta[key] = delta[key] * progress;
+        }
+    } else if (elapsed < phase1Duration + phase2Duration) {
+        // Фаза 2: удержание полной дельты
+        activeMovement.currentPhase = 2;
+        
+        for (const key in delta) {
+            activeMovement.currentDelta[key] = delta[key];
+        }
+    } else {
+        // Фаза 3: возврат от полной дельты к 0
+        activeMovement.currentPhase = 3;
+        const phase3Elapsed = elapsed - phase1Duration - phase2Duration;
+        const progress = 1 - (phase3Elapsed / phase3Duration);
+        
+        for (const key in delta) {
+            activeMovement.currentDelta[key] = delta[key] * progress;
+        }
+    }
+}
+
+// Расчет состояния скелета в режиме танца
+function calculateDanceState() {
+    // Получаем базовое состояние (начальная позиция)
+    const baseState = skeleton.getInitialState();
+    
+    // Применяем все активные дельты
+    const finalState = JSON.parse(JSON.stringify(baseState));
+    
+    for (const activeMovement of activeMovements) {
+        for (const key in activeMovement.currentDelta) {
+            finalState[key] += activeMovement.currentDelta[key];
+        }
+    }
+    
+    // Обновляем состояние скелета
+    skeleton.state = finalState;
 }
 
 // Отображение отладочной информации
@@ -556,6 +722,31 @@ function drawMovementStatus() {
     text('Или нажмите другую цифру для переключения на другое движение', x, y);
     y += 20;
     text('Shift + цифра = применить движение', x, y);
+    
+    pop();
+}
+
+// Отображение сообщения о режиме танца
+function drawDanceModeMessage() {
+    if (!danceModeMessage || millis() > danceModeMessageTime) {
+        return;
+    }
+    
+    push();
+    
+    // Настройки текста
+    textAlign(CENTER, CENTER);
+    textSize(24);
+    fill(255, 255, 0); // Желтый цвет
+    stroke(0);
+    strokeWeight(2);
+    
+    // Позиция в центре экрана
+    let x = width / 2;
+    let y = height / 2 - 50;
+    
+    // Отображаем сообщение
+    text(danceModeMessage, x, y);
     
     pop();
 }
@@ -739,14 +930,33 @@ function handleKeyDown(event) {
         case 'Digit8':
         case 'Digit9':
             event.preventDefault();
-            if (event.shiftKey) {
-                // Shift + цифра = применение движения
-                const movementIndex = parseInt(event.code.replace('Digit', '')) - 1;
-                applyMovement(movementIndex);
+            const movementIndex = parseInt(event.code.replace('Digit', '')) - 1;
+            
+            if (isDanceMode) {
+                // В режиме танца клавиши 1-9 запускают движения
+                if (event.shiftKey) {
+                    // Shift + цифра = применение движения (как раньше)
+                    applyMovement(movementIndex);
+                } else {
+                    // Обычная цифра = запуск движения в режиме танца
+                    startDanceMovement(movementIndex);
+                }
             } else {
-                // Обычная цифра = редактирование движения
-                handleMovementKey(event.code);
+                // В режиме обучения клавиши 1-9 редактируют движения
+                if (event.shiftKey) {
+                    // Shift + цифра = применение движения
+                    applyMovement(movementIndex);
+                } else {
+                    // Обычная цифра = редактирование движения
+                    handleMovementKey(event.code);
+                }
             }
+            break;
+            
+        case 'Space':
+            // Переключение режима танца
+            event.preventDefault();
+            toggleDanceMode();
             break;
     }
 
