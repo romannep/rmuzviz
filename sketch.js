@@ -5,6 +5,12 @@ let isFullscreen = false;
 let isPaused = false;
 let isDebugMode = false;
 
+// Переменные для измерения длительности бита
+let isBeatMeasuring = false;        // Состояние замера бита
+let lastBeatTime = 0;               // Время последнего нажатия клавиши `
+let beatIntervals = [];             // Массив интервалов между нажатиями
+let isBeatKeyPressed = false;       // Состояние нажатия клавиши ` (для визуального индикатора)
+
 // Размеры canvas
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -67,6 +73,9 @@ class Skeleton {
 
         // Пересчитываем позицию таза для правильного касания пола
         this.state.pelvisY = this.calculatePelvisPositionForFloorContact();
+        
+        // Длительность бита в миллисекундах (по умолчанию 500мс)
+        this.beatDuration = 500;
     }
 
     // Вспомогательная функция для конвертации градусов в радианы
@@ -284,6 +293,22 @@ class Skeleton {
             neckAngle: 0
         };
     }
+    
+    // Функция для расчета медианы массива чисел
+    calculateMedian(numbers) {
+        if (numbers.length === 0) return 0;
+        
+        // Сортируем массив
+        const sorted = [...numbers].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        
+        // Если количество элементов четное, возвращаем среднее двух средних
+        if (sorted.length % 2 === 0) {
+            return (sorted[mid - 1] + sorted[mid]) / 2;
+        } else {
+            return sorted[mid];
+        }
+    }
 }
 
 // Глобальные переменные
@@ -347,12 +372,16 @@ function setup() {
     document.getElementById('pause-btn').addEventListener('click', togglePause);
     document.getElementById('fullscreen-btn').addEventListener('click', toggleFullscreen);
 
-    // Добавляем обработчик для полноэкранного режима
+    // Добавляем обработчики для полноэкранного режима
     document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
 }
 
 function draw() {
     if (isPaused) return;
+
+    // Проверяем таймаут измерения бита
+    checkBeatMeasurementTimeout();
 
     // Фон
     background(20, 20, 40);
@@ -364,6 +393,9 @@ function draw() {
 
     // Рисуем скелет
     skeleton.draw();
+
+    // Рисуем визуальный индикатор измерения бита
+    drawBeatIndicator();
 
     // Отображаем отладочную информацию
     drawDebugInfo();
@@ -622,6 +654,12 @@ function handleKeyDown(event) {
             event.preventDefault();
             skeleton.state.leftShoulderAngle -= angleSpeed;
             break;
+            
+        case '`':
+            // Измерение длительности бита
+            event.preventDefault();
+            handleBeatMeasurement();
+            break;
     }
 
     // Управление интерфейсом
@@ -631,6 +669,69 @@ function handleKeyDown(event) {
     } else if (event.key === 'Escape' && isFullscreen) {
         event.preventDefault();
         exitFullscreen();
+    }
+}
+
+// Обработка измерения длительности бита
+function handleBeatMeasurement() {
+    const currentTime = millis();
+    
+    if (!isBeatMeasuring) {
+        // Начинаем измерение
+        isBeatMeasuring = true;
+        lastBeatTime = currentTime;
+        beatIntervals = [];
+        console.log('Начато измерение длительности бита. Нажимайте клавишу ` в такт музыке.');
+    } else {
+        // Продолжаем измерение
+        const interval = currentTime - lastBeatTime;
+        beatIntervals.push(interval);
+        lastBeatTime = currentTime;
+        console.log(`Интервал: ${interval}мс. Всего измерений: ${beatIntervals.length}`);
+    }
+    
+    // Устанавливаем флаг для визуального индикатора
+    isBeatKeyPressed = true;
+}
+
+// Обработка отпускания клавиш
+function handleKeyUp(event) {
+    if (event.key === '`') {
+        // Сбрасываем визуальный индикатор
+        isBeatKeyPressed = false;
+    }
+}
+
+// Проверка таймаута измерения бита
+function checkBeatMeasurementTimeout() {
+    if (isBeatMeasuring && millis() - lastBeatTime > 2000) {
+        // Завершаем измерение
+        isBeatMeasuring = false;
+        
+        if (beatIntervals.length > 0) {
+            // Вычисляем медиану интервалов
+            const medianInterval = skeleton.calculateMedian(beatIntervals);
+            skeleton.beatDuration = Math.round(medianInterval);
+            
+            console.log(`Измерение завершено! Длительность бита: ${skeleton.beatDuration}мс`);
+            console.log(`Измеренные интервалы: [${beatIntervals.join(', ')}]мс`);
+        } else {
+            console.log('Измерение отменено - нет данных');
+        }
+        
+        // Очищаем данные
+        beatIntervals = [];
+    }
+}
+
+// Отрисовка визуального индикатора измерения бита
+function drawBeatIndicator() {
+    if (isBeatKeyPressed) {
+        push();
+        fill(255, 0, 0); // Красный цвет
+        noStroke();
+        ellipse(width - 30, 30, 20, 20); // Круг в правом верхнем углу
+        pop();
     }
 }
 
