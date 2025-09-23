@@ -22,6 +22,7 @@ let isDanceMode = false;            // Состояние режима танц�
 let activeMovements = [];           // Массив активных движений с дельтами и временем
 let danceModeMessage = '';          // Сообщение о переключении режима
 let danceModeMessageTime = 0;       // Время показа сообщения
+let danceBaseState = null;          // Изменяемое базовое состояние для режима танца
 
 // Система перетаскивания суставов мышкой
 let isDragging = false;             // Состояние перетаскивания
@@ -510,6 +511,9 @@ function toggleDanceMode() {
     // Очищаем активные движения при переключении режима
     activeMovements = [];
     
+    // Сбрасываем изменяемое базовое состояние при переключении режима
+    danceBaseState = null;
+    
     // Устанавливаем сообщение и время его показа
     danceModeMessage = isDanceMode ? 'Режим танца' : 'Режим обучения';
     danceModeMessageTime = millis() + 1500; // Показываем 1.5 секунды
@@ -553,6 +557,48 @@ function startDanceMovement(movementIndex) {
     console.log(`Запущено движение ${movementIndex + 1} в режиме танца`);
 }
 
+// Запуск движения в режиме танца с изменением базового состояния
+function startDanceMovementWithBaseChange(movementIndex) {
+    if (movements[movementIndex] === null || movements[movementIndex].delta === null) {
+        console.log(`Движение ${movementIndex + 1} не найдено`);
+        return;
+    }
+    
+    const movement = movements[movementIndex];
+    const currentTime = millis();
+    const beatDuration = skeleton.beatDuration;
+    const movementDuration = beatDuration * movement.duration; // Используем индивидуальную длительность
+    
+    // Инициализируем базовое состояние для танца если еще не инициализировано
+    if (danceBaseState === null) {
+        danceBaseState = JSON.parse(JSON.stringify(skeleton.getInitialState()));
+    }
+    
+    // Создаем активное движение с изменением базового состояния
+    const activeMovement = {
+        movementIndex: movementIndex,
+        delta: JSON.parse(JSON.stringify(movement.delta)), // Копия дельты
+        startTime: currentTime,
+        phase1Duration: movementDuration,        // Только фаза 1 - изменение от 0 до полной дельты
+        phase2Duration: 0,                       // Нет фазы паузы
+        phase3Duration: 0,                       // Нет фазы возврата
+        totalDuration: movementDuration,         // Общая длительность = только фаза 1
+        currentPhase: 1,                         // Текущая фаза (только 1)
+        currentDelta: {},                        // Текущая дельта (изменяется со временем)
+        changesBaseState: true                   // Флаг что это движение изменяет базовое состояние
+    };
+    
+    // Инициализируем текущую дельту нулями
+    for (const key in movement.delta) {
+        activeMovement.currentDelta[key] = 0;
+    }
+    
+    // Добавляем в массив активных движений
+    activeMovements.push(activeMovement);
+    
+    console.log(`Запущено движение ${movementIndex + 1} в режиме танца с изменением базового состояния`);
+}
+
 // Обновление активных движений
 function updateActiveMovements() {
     const currentTime = millis();
@@ -564,6 +610,15 @@ function updateActiveMovements() {
         
         // Проверяем, завершилось ли движение
         if (elapsed >= activeMovement.totalDuration) {
+            // Если это движение изменяет базовое состояние, применяем изменения к базовому состоянию
+            if (activeMovement.changesBaseState && danceBaseState !== null) {
+                for (const key in activeMovement.delta) {
+                    if (danceBaseState.hasOwnProperty(key)) {
+                        danceBaseState[key] += activeMovement.delta[key];
+                    }
+                }
+                console.log(`Движение ${activeMovement.movementIndex + 1} применено к базовому состоянию`);
+            }
             activeMovements.splice(i, 1);
             continue;
         }
@@ -580,37 +635,48 @@ function updateActiveMovements() {
 function updateMovementPhase(activeMovement, elapsed) {
     const { delta, phase1Duration, phase2Duration, phase3Duration } = activeMovement;
     
-    if (elapsed < phase1Duration) {
-        // Фаза 1: изменение от 0 до полной дельты
+    if (activeMovement.changesBaseState) {
+        // Для движений с изменением базового состояния - только фаза 1
         activeMovement.currentPhase = 1;
-        const progress = elapsed / phase1Duration;
+        const progress = Math.min(elapsed / phase1Duration, 1.0); // Ограничиваем прогресс до 1.0
         
         for (const key in delta) {
             activeMovement.currentDelta[key] = delta[key] * progress;
-        }
-    } else if (elapsed < phase1Duration + phase2Duration) {
-        // Фаза 2: удержание полной дельты
-        activeMovement.currentPhase = 2;
-        
-        for (const key in delta) {
-            activeMovement.currentDelta[key] = delta[key];
         }
     } else {
-        // Фаза 3: возврат от полной дельты к 0
-        activeMovement.currentPhase = 3;
-        const phase3Elapsed = elapsed - phase1Duration - phase2Duration;
-        const progress = 1 - (phase3Elapsed / phase3Duration);
-        
-        for (const key in delta) {
-            activeMovement.currentDelta[key] = delta[key] * progress;
+        // Обычные движения - все три фазы
+        if (elapsed < phase1Duration) {
+            // Фаза 1: изменение от 0 до полной дельты
+            activeMovement.currentPhase = 1;
+            const progress = elapsed / phase1Duration;
+            
+            for (const key in delta) {
+                activeMovement.currentDelta[key] = delta[key] * progress;
+            }
+        } else if (elapsed < phase1Duration + phase2Duration) {
+            // Фаза 2: удержание полной дельты
+            activeMovement.currentPhase = 2;
+            
+            for (const key in delta) {
+                activeMovement.currentDelta[key] = delta[key];
+            }
+        } else {
+            // Фаза 3: возврат от полной дельты к 0
+            activeMovement.currentPhase = 3;
+            const phase3Elapsed = elapsed - phase1Duration - phase2Duration;
+            const progress = 1 - (phase3Elapsed / phase3Duration);
+            
+            for (const key in delta) {
+                activeMovement.currentDelta[key] = delta[key] * progress;
+            }
         }
     }
 }
 
 // Расчет состояния скелета в режиме танца
 function calculateDanceState() {
-    // Получаем базовое состояние (начальная позиция)
-    const baseState = skeleton.getInitialState();
+    // Используем изменяемое базовое состояние если оно инициализировано, иначе начальное
+    const baseState = danceBaseState !== null ? danceBaseState : skeleton.getInitialState();
     
     // Применяем все активные дельты
     const finalState = JSON.parse(JSON.stringify(baseState));
@@ -744,18 +810,28 @@ function drawMovementStatus() {
     let y = 20;
     
     // Отображаем статус редактирования
-    text(`Редактирование движения ${editingMovementIndex + 1}`, x, y);
-    y += 25;
-    
-    textSize(12);
-    text('Измените позу скелета и нажмите ту же клавишу для сохранения', x, y);
+    if (editingMovementIndex === -1) {
+        text('Редактирование движения возврата к состоянию сброса', x, y);
+        y += 25;
+        textSize(12);
+        text('Измените длительность движения клавишами + и -', x, y);
+    } else {
+        text(`Редактирование движения ${editingMovementIndex + 1}`, x, y);
+        y += 25;
+        textSize(12);
+        text('Измените позу скелета и нажмите ту же клавишу для сохранения', x, y);
+    }
     y += 20;
     
     // Отображаем длительность движения в правом верхнем углу
     textAlign(RIGHT, TOP);
     textSize(14);
     fill(255, 255, 0);
-    text(`Длительность: ${movements[editingMovementIndex].duration} тактов`, width - 20, 20);
+    if (editingMovementIndex === -1) {
+        text(`Длительность: ${movements[9] ? movements[9].duration : 1.0} тактов`, width - 20, 20);
+    } else {
+        text(`Длительность: ${movements[editingMovementIndex].duration} тактов`, width - 20, 20);
+    }
     textSize(10);
     text('+ / - для изменения', width - 20, 40);
     text('Или нажмите другую цифру для переключения на другое движение', x, y);
@@ -797,15 +873,25 @@ function handleKeyDown(event) {
     // Управление танцем (используем event.code для независимости от раскладки)
     switch (event.code) {
         case 'KeyQ':
-            // Сброс до начального состояния
             event.preventDefault();
-            skeleton.reset();
+            if (isDanceMode) {
+                // В режиме танца - движение 1 с изменением базового состояния
+                startDanceMovementWithBaseChange(0);
+            } else {
+                // В режиме обучения - сброс до начального состояния
+                skeleton.reset();
+            }
             break;
 
         case 'KeyW':
-            // Включение режима отладки
             event.preventDefault();
-            toggleDebugMode();
+            if (isDanceMode) {
+                // В режиме танца - движение 2 с изменением базового состояния
+                startDanceMovementWithBaseChange(1);
+            } else {
+                // В режиме обучения - включение режима отладки
+                toggleDebugMode();
+            }
             break;
 
         case 'KeyC':
@@ -887,27 +973,71 @@ function handleKeyDown(event) {
             break;
 
         case 'KeyE':
-            // Правое плечо вниз
             event.preventDefault();
-            skeleton.state.rightUpperArmAngle += angleSpeed;
+            if (isDanceMode) {
+                // В режиме танца - движение 3 с изменением базового состояния
+                startDanceMovementWithBaseChange(2);
+            } else {
+                // В режиме обучения - правое плечо вниз
+                skeleton.state.rightUpperArmAngle += angleSpeed;
+            }
             break;
 
         case 'KeyR':
-            // Правое плечо вверх
             event.preventDefault();
-            skeleton.state.rightUpperArmAngle -= angleSpeed;
+            if (isDanceMode) {
+                // В режиме танца - движение 4 с изменением базового состояния
+                startDanceMovementWithBaseChange(3);
+            } else {
+                // В режиме обучения - правое плечо вверх
+                skeleton.state.rightUpperArmAngle -= angleSpeed;
+            }
             break;
 
         case 'KeyU':
-            // Левое плечо вверх
             event.preventDefault();
-            skeleton.state.leftUpperArmAngle += angleSpeed;
+            if (isDanceMode) {
+                // В режиме танца - движение 7 с изменением базового состояния
+                startDanceMovementWithBaseChange(6);
+            } else {
+                // В режиме обучения - левое плечо вверх
+                skeleton.state.leftUpperArmAngle += angleSpeed;
+            }
             break;
 
         case 'KeyI':
-            // Левое плечо вниз
             event.preventDefault();
-            skeleton.state.leftUpperArmAngle -= angleSpeed;
+            if (isDanceMode) {
+                // В режиме танца - движение 8 с изменением базового состояния
+                startDanceMovementWithBaseChange(7);
+            } else {
+                // В режиме обучения - левое плечо вниз
+                skeleton.state.leftUpperArmAngle -= angleSpeed;
+            }
+            break;
+
+        case 'KeyT':
+            event.preventDefault();
+            if (isDanceMode) {
+                // В режиме танца - движение 5 с изменением базового состояния
+                startDanceMovementWithBaseChange(4);
+            }
+            break;
+
+        case 'KeyY':
+            event.preventDefault();
+            if (isDanceMode) {
+                // В режиме танца - движение 6 с изменением базового состояния
+                startDanceMovementWithBaseChange(5);
+            }
+            break;
+
+        case 'KeyO':
+            event.preventDefault();
+            if (isDanceMode) {
+                // В режиме танца - движение 9 с изменением базового состояния
+                startDanceMovementWithBaseChange(8);
+            }
             break;
 
         case 'KeyS':
@@ -958,6 +1088,43 @@ function handleKeyDown(event) {
             handleBeatMeasurement();
             break;
             
+        // Обработка клавиши 0 - движение возврата к состоянию сброса
+        case 'Digit0':
+            event.preventDefault();
+            if (isDanceMode) {
+                // В режиме танца - запуск движения возврата к состоянию сброса
+                startResetMovement(false);
+            } else {
+                // В режиме обучения - редактирование длительности движения возврата
+                if (isEditingMovement) {
+                    // Если уже редактируем движение возврата, сохраняем и выходим
+                    if (editingMovementIndex === -1) {
+                        // Сохраняем длительность движения возврата
+                        const resetMovement = createResetMovement();
+                        resetMovement.duration = movements[9].duration; // Используем сохраненную длительность
+                        movements[9] = resetMovement;
+                        console.log(`Длительность движения возврата: ${movements[9].duration} тактов`);
+                        exitMovementEditing();
+                    } else {
+                        // Переключаемся на редактирование движения возврата
+                        exitMovementEditing();
+                        startMovementEditing(-1); // -1 для движения возврата
+                    }
+                } else {
+                    // Начинаем редактирование движения возврата
+                    startMovementEditing(-1);
+                }
+            }
+            break;
+            
+        case 'KeyP':
+            event.preventDefault();
+            if (isDanceMode) {
+                // В режиме танца - мгновенное изменение состояния
+                startResetMovement(true);
+            }
+            break;
+
         // Обработка клавиш 1-9 для системы движений
         case 'Digit1':
         case 'Digit2':
@@ -997,8 +1164,17 @@ function handleKeyDown(event) {
             // Увеличение длительности движения (клавиши + и =)
             event.preventDefault();
             if (isEditingMovement) {
-                movements[editingMovementIndex].duration = Math.min(movements[editingMovementIndex].duration + 0.25, 4.0);
-                console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+                if (editingMovementIndex === -1) {
+                    // Для движения возврата
+                    if (!movements[9]) {
+                        movements[9] = createResetMovement();
+                    }
+                    movements[9].duration = Math.min(movements[9].duration + 0.25, 4.0);
+                    console.log(`Длительность движения возврата: ${movements[9].duration} тактов`);
+                } else {
+                    movements[editingMovementIndex].duration = Math.min(movements[editingMovementIndex].duration + 0.25, 4.0);
+                    console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+                }
             }
             break;
             
@@ -1007,8 +1183,17 @@ function handleKeyDown(event) {
             // Уменьшение длительности движения (клавиши -)
             event.preventDefault();
             if (isEditingMovement) {
-                movements[editingMovementIndex].duration = Math.max(movements[editingMovementIndex].duration - 0.25, 0.25);
-                console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+                if (editingMovementIndex === -1) {
+                    // Для движения возврата
+                    if (!movements[9]) {
+                        movements[9] = createResetMovement();
+                    }
+                    movements[9].duration = Math.max(movements[9].duration - 0.25, 0.25);
+                    console.log(`Длительность движения возврата: ${movements[9].duration} тактов`);
+                } else {
+                    movements[editingMovementIndex].duration = Math.max(movements[editingMovementIndex].duration - 0.25, 0.25);
+                    console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+                }
             }
             break;
             
@@ -1057,11 +1242,25 @@ function startMovementEditing(movementIndex) {
     // Сохраняем текущее состояние как базовое
     baseState = JSON.parse(JSON.stringify(skeleton.state));
     
-    console.log(`Начато редактирование движения ${movementIndex + 1}`);
+    if (movementIndex === -1) {
+        // Инициализируем движение возврата, если его еще нет
+        if (!movements[9]) {
+            movements[9] = createResetMovement();
+        }
+        console.log('Начато редактирование движения возврата к состоянию сброса');
+    } else {
+        console.log(`Начато редактирование движения ${movementIndex + 1}`);
+    }
 }
 
 // Выход из режима редактирования движения
 function exitMovementEditing() {
+    // Восстанавливаем состояние скелета к тому, которое было до входа в режим редактирования
+    if (baseState !== null) {
+        skeleton.state = JSON.parse(JSON.stringify(baseState));
+        console.log('Состояние скелета восстановлено к состоянию до редактирования');
+    }
+    
     isEditingMovement = false;
     editingMovementIndex = -1;
     baseState = null;
@@ -1073,16 +1272,26 @@ function exitMovementEditing() {
 function saveMovement(movementIndex) {
     if (!baseState) return;
     
-    // Вычисляем дельту между текущим состоянием и базовым
-    const delta = calculateStateDelta(baseState, skeleton.state);
+    if (movementIndex === -1) {
+        // Для движения возврата - обновляем только длительность
+        if (movements[9]) {
+            movements[9].duration = movements[9].duration; // Сохраняем текущую длительность
+            console.log(`Длительность движения возврата: ${movements[9].duration} тактов`);
+        }
+    } else {
+        // Вычисляем дельту между текущим состоянием и базовым
+        const delta = calculateStateDelta(baseState, skeleton.state);
+        
+        // Сохраняем движение с текущей длительностью
+        movements[movementIndex] = {
+            delta: delta,
+            duration: movements[movementIndex].duration  // Сохраняем текущую длительность
+        };
+    }
     
-    // Сохраняем движение с текущей длительностью
-    movements[movementIndex] = {
-        delta: delta,
-        duration: movements[movementIndex].duration  // Сохраняем текущую длительность
-    };
-    
-    console.log(`Движение ${movementIndex + 1} сохранено:`, delta, `длительность: ${movements[movementIndex].duration} тактов`);
+    if (movementIndex !== -1) {
+        console.log(`Движение ${movementIndex + 1} сохранено!. Длительность: ${movements[movementIndex].duration} тактов`);
+    }
 }
 
 // Вычисление дельты между двумя состояниями
@@ -1116,6 +1325,97 @@ function applyMovement(movementIndex) {
     }
     
     console.log(`Применено движение ${movementIndex + 1}`);
+}
+
+// Получение состояния сброса (начального состояния)
+function getResetState() {
+    return {
+        // Позиция таза рассчитывается так, чтобы ступни касались пола
+        pelvisX: CANVAS_WIDTH / 2,
+        pelvisY: skeleton.calculatePelvisPositionForFloorContact(),
+
+        // Туловище вертикально
+        spineAngle: -90,
+
+        // Ноги слегка в стороны для естественной позы
+        leftThighAngle: 160,
+        rightThighAngle: 200,
+        leftShinAngle: 0,
+        rightShinAngle: 0,
+
+        // Плечи горизонтально
+        leftShoulderAngle: 90,
+        rightShoulderAngle: -90,
+
+        // Руки вниз и слегка в стороны
+        leftUpperArmAngle: 90,
+        rightUpperArmAngle: -90,
+        leftForearmAngle: 0,
+        rightForearmAngle: 0,
+
+        // Шея прямо
+        neckAngle: 0
+    };
+}
+
+// Создание движения возврата к состоянию сброса
+function createResetMovement() {
+    const resetState = getResetState();
+    const currentState = skeleton.state;
+    
+    // Вычисляем дельту между текущим состоянием и состоянием сброса
+    const delta = calculateStateDelta(currentState, resetState);
+    
+    return {
+        delta: delta,
+        duration: 1.0 // Длительность по умолчанию - 1 такт
+    };
+}
+
+// Запуск движения возврата к состоянию сброса (с тремя фазами)
+function startResetMovement(changeState = false) {
+    const resetMovement = createResetMovement();
+    const currentTime = millis();
+    const beatDuration = skeleton.beatDuration;
+    const movementDuration = beatDuration * resetMovement.duration;
+    
+    // Создаем активное движение
+    const activeMovement = {
+        movementIndex: -1, // Специальный индекс для движения сброса
+        delta: resetMovement.delta,
+        startTime: currentTime,
+        totalDuration: movementDuration,
+        phase1Duration: movementDuration * 0.4, // 2/5 длительности
+        phase2Duration: movementDuration * 0.2, // 1/5 длительности
+        phase3Duration: movementDuration * 0.4, // 2/5 длительности
+        currentPhase: 1,
+        currentDelta: {},
+        changesBaseState: changeState
+    };
+    
+    // Инициализируем текущую дельту нулями
+    for (const key in resetMovement.delta) {
+        activeMovement.currentDelta[key] = 0;
+    }
+    
+    // Добавляем в массив активных движений
+    activeMovements.push(activeMovement);
+    
+    console.log('Запущено движение возврата к состоянию сброса');
+}
+
+// Мгновенное изменение состояния к состоянию сброса (одна фаза)
+function instantResetToState() {
+    const resetState = getResetState();
+    
+    // Применяем состояние сброса напрямую
+    for (const key in resetState) {
+        if (skeleton.state.hasOwnProperty(key)) {
+            skeleton.state[key] = resetState[key];
+        }
+    }
+    
+    console.log('Состояние мгновенно изменено к состоянию сброса');
 }
 
 // Обработка измерения длительности бита
