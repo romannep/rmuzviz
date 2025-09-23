@@ -435,7 +435,10 @@ function setup() {
     skeleton = new Skeleton();
     
     // Инициализируем массив движений (9 пустых движений)
-    movements = new Array(9).fill(null);
+    movements = new Array(9).fill(null).map(() => ({
+        delta: null,
+        duration: 1.0  // По умолчанию 1 такт
+    }));
 
     // Добавляем обработчики для кнопок
     document.getElementById('reset-btn').addEventListener('click', resetSkeleton);
@@ -516,7 +519,7 @@ function toggleDanceMode() {
 
 // Запуск движения в режиме танца
 function startDanceMovement(movementIndex) {
-    if (movements[movementIndex] === null) {
+    if (movements[movementIndex] === null || movements[movementIndex].delta === null) {
         console.log(`Движение ${movementIndex + 1} не найдено`);
         return;
     }
@@ -524,22 +527,23 @@ function startDanceMovement(movementIndex) {
     const movement = movements[movementIndex];
     const currentTime = millis();
     const beatDuration = skeleton.beatDuration;
+    const movementDuration = beatDuration * movement.duration; // Используем индивидуальную длительность
     
     // Создаем активное движение
     const activeMovement = {
         movementIndex: movementIndex,
-        delta: JSON.parse(JSON.stringify(movement)), // Копия дельты
+        delta: JSON.parse(JSON.stringify(movement.delta)), // Копия дельты
         startTime: currentTime,
-        phase1Duration: beatDuration * 0.4,  // 2/5 бита на изменение
-        phase2Duration: beatDuration * 0.2,  // 1/5 бита на удержание
-        phase3Duration: beatDuration * 0.4,  // 2/5 бита на возврат
-        totalDuration: beatDuration,         // Общая длительность = бит
-        currentPhase: 1,                     // Текущая фаза (1, 2, 3)
-        currentDelta: {}                     // Текущая дельта (изменяется со временем)
+        phase1Duration: movementDuration * 0.4,  // 2/5 длительности на изменение
+        phase2Duration: movementDuration * 0.2,  // 1/5 длительности на удержание
+        phase3Duration: movementDuration * 0.4,  // 2/5 длительности на возврат
+        totalDuration: movementDuration,         // Общая длительность = движение * бит
+        currentPhase: 1,                         // Текущая фаза (1, 2, 3)
+        currentDelta: {}                         // Текущая дельта (изменяется со временем)
     };
     
     // Инициализируем текущую дельту нулями
-    for (const key in movement) {
+    for (const key in movement.delta) {
         activeMovement.currentDelta[key] = 0;
     }
     
@@ -710,8 +714,11 @@ function drawDebugInfo() {
         
         // Показываем сохраненные движения
         for (let i = 0; i < movements.length; i++) {
-            const status = movements[i] ? 'Сохранено' : 'Пусто';
-            text(`Движение ${i + 1}: ${status}`, x, y);
+            if (movements[i] && movements[i].delta) {
+                text(`Движение ${i + 1}: Сохранено (${movements[i].duration} тактов)`, x, y);
+            } else {
+                text(`Движение ${i + 1}: Пусто`, x, y);
+            }
             y += lineHeight;
         }
     }
@@ -743,6 +750,14 @@ function drawMovementStatus() {
     textSize(12);
     text('Измените позу скелета и нажмите ту же клавишу для сохранения', x, y);
     y += 20;
+    
+    // Отображаем длительность движения в правом верхнем углу
+    textAlign(RIGHT, TOP);
+    textSize(14);
+    fill(255, 255, 0);
+    text(`Длительность: ${movements[editingMovementIndex].duration} тактов`, width - 20, 20);
+    textSize(10);
+    text('+ / - для изменения', width - 20, 40);
     text('Или нажмите другую цифру для переключения на другое движение', x, y);
     y += 20;
     text('Shift + цифра = применить движение', x, y);
@@ -977,6 +992,26 @@ function handleKeyDown(event) {
             }
             break;
             
+        case 'Equal':
+        case 'NumpadAdd':
+            // Увеличение длительности движения (клавиши + и =)
+            event.preventDefault();
+            if (isEditingMovement) {
+                movements[editingMovementIndex].duration = Math.min(movements[editingMovementIndex].duration + 0.25, 4.0);
+                console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+            }
+            break;
+            
+        case 'Minus':
+        case 'NumpadSubtract':
+            // Уменьшение длительности движения (клавиши -)
+            event.preventDefault();
+            if (isEditingMovement) {
+                movements[editingMovementIndex].duration = Math.max(movements[editingMovementIndex].duration - 0.25, 0.25);
+                console.log(`Длительность движения ${editingMovementIndex + 1}: ${movements[editingMovementIndex].duration} тактов`);
+            }
+            break;
+            
         case 'Space':
             // Переключение режима танца
             event.preventDefault();
@@ -1041,10 +1076,13 @@ function saveMovement(movementIndex) {
     // Вычисляем дельту между текущим состоянием и базовым
     const delta = calculateStateDelta(baseState, skeleton.state);
     
-    // Сохраняем движение
-    movements[movementIndex] = delta;
+    // Сохраняем движение с текущей длительностью
+    movements[movementIndex] = {
+        delta: delta,
+        duration: movements[movementIndex].duration  // Сохраняем текущую длительность
+    };
     
-    console.log(`Движение ${movementIndex + 1} сохранено:`, delta);
+    console.log(`Движение ${movementIndex + 1} сохранено:`, delta, `длительность: ${movements[movementIndex].duration} тактов`);
 }
 
 // Вычисление дельты между двумя состояниями
@@ -1063,12 +1101,12 @@ function calculateStateDelta(baseState, currentState) {
 
 // Применение движения к текущему состоянию
 function applyMovement(movementIndex) {
-    if (movements[movementIndex] === null) {
+    if (movements[movementIndex] === null || movements[movementIndex].delta === null) {
         console.log(`Движение ${movementIndex + 1} не найдено`);
         return;
     }
     
-    const delta = movements[movementIndex];
+    const delta = movements[movementIndex].delta;
     
     // Применяем дельту к текущему состоянию
     for (const key in delta) {
