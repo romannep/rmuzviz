@@ -23,6 +23,13 @@ let activeMovements = [];           // Массив активных движе�
 let danceModeMessage = '';          // Сообщение о переключении режима
 let danceModeMessageTime = 0;       // Время показа сообщения
 
+// Система перетаскивания суставов мышкой
+let isDragging = false;             // Состояние перетаскивания
+let draggedJoint = null;            // Название перетаскиваемого сустава
+let hoveredJoint = null;            // Сустав под курсором мыши
+let dragStartAngle = 0;             // Начальный угол при начале перетаскивания
+let dragStartMouseAngle = 0;        // Начальный угол курсора мыши
+
 // Размеры canvas
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -231,19 +238,36 @@ class Skeleton {
         stroke(0);
 
         const jointRadius = 6;
-        circle(joints.leftFoot.x, joints.leftFoot.y, jointRadius);
-        circle(joints.rightFoot.x, joints.rightFoot.y, jointRadius);
-        circle(joints.leftKnee.x, joints.leftKnee.y, jointRadius);
-        circle(joints.rightKnee.x, joints.rightKnee.y, jointRadius);
-        circle(joints.pelvis.x, joints.pelvis.y, jointRadius);
-        circle(joints.spineEnd.x, joints.spineEnd.y, jointRadius);
-        circle(joints.leftShoulder.x, joints.leftShoulder.y, jointRadius);
-        circle(joints.rightShoulder.x, joints.rightShoulder.y, jointRadius);
-        circle(joints.leftElbow.x, joints.leftElbow.y, jointRadius);
-        circle(joints.rightElbow.x, joints.rightElbow.y, jointRadius);
-        circle(joints.leftHand.x, joints.leftHand.y, jointRadius);
-        circle(joints.rightHand.x, joints.rightHand.y, jointRadius);
-        circle(joints.head.x, joints.head.y, jointRadius * 4);
+        
+        // Функция для отрисовки сустава с возможной подсветкой
+        const drawJoint = (joint, radius, jointName) => {
+            // Рисуем желтую окружность при наведении (только в режиме обучения)
+            if (!isDanceMode && hoveredJoint === jointName) {
+                strokeWeight(3);
+                stroke(255, 255, 0); // Желтый цвет
+                noFill();
+                circle(joint.x, joint.y, radius + 8);
+                strokeWeight(2);
+                stroke(0);
+            }
+            
+            // Обычный сустав
+            circle(joint.x, joint.y, radius);
+        };
+        
+        drawJoint(joints.leftFoot, jointRadius, 'leftFoot');
+        drawJoint(joints.rightFoot, jointRadius, 'rightFoot');
+        drawJoint(joints.leftKnee, jointRadius, 'leftKnee');
+        drawJoint(joints.rightKnee, jointRadius, 'rightKnee');
+        drawJoint(joints.pelvis, jointRadius, 'pelvis');
+        drawJoint(joints.spineEnd, jointRadius, 'spineEnd');
+        drawJoint(joints.leftShoulder, jointRadius, 'leftShoulder');
+        drawJoint(joints.rightShoulder, jointRadius, 'rightShoulder');
+        drawJoint(joints.leftElbow, jointRadius, 'leftElbow');
+        drawJoint(joints.rightElbow, jointRadius, 'rightElbow');
+        drawJoint(joints.leftHand, jointRadius, 'leftHand');
+        drawJoint(joints.rightHand, jointRadius, 'rightHand');
+        drawJoint(joints.head, jointRadius * 4, 'head');
     }
 
     // Расчет позиции таза для касания ступней пола
@@ -2212,4 +2236,117 @@ const drawRealisticEyes = (joints) => {
     arc(joints.head.x, joints.head.y + 5, 8, 3, 0, PI);
 
     pop();
+}
+
+// Функция для определения ближайшего сустава к курсору мыши
+function getNearestJoint(mouseX, mouseY, joints) {
+    const threshold = 30; // Радиус обнаружения сустава
+    let nearestJoint = null;
+    let minDistance = threshold;
+    
+    // Проверяем все суставы кроме таза
+    const jointNames = [
+        'spineEnd', 'leftShoulder', 'rightShoulder',
+        'leftElbow', 'rightElbow', 'leftHand', 'rightHand',
+        'leftKnee', 'rightKnee', 'leftFoot', 'rightFoot', 'head'
+    ];
+    
+    for (let jointName of jointNames) {
+        const joint = joints[jointName];
+        if (joint) {
+            const distance = dist(mouseX, mouseY, joint.x, joint.y);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestJoint = jointName;
+            }
+        }
+    }
+    
+    return nearestJoint;
+}
+
+// Функция для получения родительского сустава и соответствующего угла
+function getParentJointAndAngle(jointName) {
+    const parentMap = {
+        'spineEnd': { parent: 'pelvis', angle: 'spineAngle' },
+        'leftShoulder': { parent: 'spineEnd', angle: 'leftShoulderAngle' },
+        'rightShoulder': { parent: 'spineEnd', angle: 'rightShoulderAngle' },
+        'leftElbow': { parent: 'leftShoulder', angle: 'leftUpperArmAngle' },
+        'rightElbow': { parent: 'rightShoulder', angle: 'rightUpperArmAngle' },
+        'leftHand': { parent: 'leftElbow', angle: 'leftForearmAngle' },
+        'rightHand': { parent: 'rightElbow', angle: 'rightForearmAngle' },
+        'leftKnee': { parent: 'pelvis', angle: 'leftThighAngle' },
+        'rightKnee': { parent: 'pelvis', angle: 'rightThighAngle' },
+        'leftFoot': { parent: 'leftKnee', angle: 'leftShinAngle' },
+        'rightFoot': { parent: 'rightKnee', angle: 'rightShinAngle' },
+        'head': { parent: 'spineEnd', angle: 'neckAngle' }
+    };
+    
+    return parentMap[jointName] || null;
+}
+
+// Обработчики событий мыши для перетаскивания суставов
+function mousePressed() {
+    // Работает только в режиме обучения (не танца)
+    if (isDanceMode) return;
+    
+    const joints = skeleton.calculateJointPositions();
+    const nearestJoint = getNearestJoint(mouseX, mouseY, joints);
+    
+    if (nearestJoint) {
+        isDragging = true;
+        draggedJoint = nearestJoint;
+        
+        // Получаем родительский сустав и угол
+        const parentInfo = getParentJointAndAngle(nearestJoint);
+        if (parentInfo) {
+            const parentJoint = joints[parentInfo.parent];
+            const currentAngle = skeleton.state[parentInfo.angle];
+            
+            // Вычисляем начальный угол курсора мыши относительно родительского сустава
+            dragStartMouseAngle = atan2(mouseY - parentJoint.y, mouseX - parentJoint.x) * 180 / PI;
+            dragStartAngle = currentAngle;
+        }
+    }
+}
+
+function mouseDragged() {
+    // Работает только в режиме обучения (не танца)
+    if (isDanceMode || !isDragging || !draggedJoint) return;
+    
+    const parentInfo = getParentJointAndAngle(draggedJoint);
+    if (!parentInfo) return;
+    
+    const joints = skeleton.calculateJointPositions();
+    const parentJoint = joints[parentInfo.parent];
+    
+    // Вычисляем текущий угол курсора мыши относительно родительского сустава
+    const currentMouseAngle = atan2(mouseY - parentJoint.y, mouseX - parentJoint.x) * 180 / PI;
+    
+    // Вычисляем изменение угла
+    let angleDelta = currentMouseAngle - dragStartMouseAngle;
+    
+    // Нормализуем угол в диапазон -180..180
+    while (angleDelta > 180) angleDelta -= 360;
+    while (angleDelta < -180) angleDelta += 360;
+    
+    // Применяем изменение к углу
+    const newAngle = dragStartAngle + angleDelta;
+    skeleton.state[parentInfo.angle] = newAngle;
+    
+    // Пересчитываем позицию таза для правильного касания пола
+    skeleton.state.pelvisY = skeleton.calculatePelvisPositionForFloorContact();
+}
+
+function mouseReleased() {
+    isDragging = false;
+    draggedJoint = null;
+}
+
+function mouseMoved() {
+    // Работает только в режиме обучения (не танца)
+    if (isDanceMode) return;
+    
+    const joints = skeleton.calculateJointPositions();
+    hoveredJoint = getNearestJoint(mouseX, mouseY, joints);
 }
