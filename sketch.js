@@ -11,6 +11,12 @@ let lastBeatTime = 0;               // Время последнего нажа�
 let beatIntervals = [];             // Массив интервалов между нажатиями
 let isBeatKeyPressed = false;       // Состояние нажатия клавиши ` (для визуального индикатора)
 
+// Система движений
+let movements = [];                 // Массив из 9 движений (индексы 0-8 для клавиш 1-9)
+let isEditingMovement = false;      // Состояние редактирования движения
+let editingMovementIndex = -1;      // Индекс редактируемого движения (0-8)
+let baseState = null;               // Базовое состояние при начале редактирования
+
 // Размеры canvas
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -366,6 +372,9 @@ function setup() {
 
     // Создаем скелет
     skeleton = new Skeleton();
+    
+    // Инициализируем массив движений (9 пустых движений)
+    movements = new Array(9).fill(null);
 
     // Добавляем обработчики для кнопок
     document.getElementById('reset-btn').addEventListener('click', resetSkeleton);
@@ -399,6 +408,9 @@ function draw() {
 
     // Отображаем отладочную информацию
     drawDebugInfo();
+    
+    // Отображаем статус редактирования движения (всегда видимый)
+    drawMovementStatus();
 }
 
 // Новая система управления согласно task.md
@@ -489,7 +501,62 @@ function drawDebugInfo() {
     // Инструкция
     y += lineHeight;
     text('Нажмите W для выключения', x, y);
+    y += lineHeight * 1.5;
 
+    // Отображение статуса редактирования движения
+    if (isEditingMovement) {
+        text(`=== РЕДАКТИРОВАНИЕ ДВИЖЕНИЯ ${editingMovementIndex + 1} ===`, x, y);
+        y += lineHeight;
+        text('Измените позу скелета и нажмите ту же клавишу для сохранения', x, y);
+        y += lineHeight;
+        text('Или нажмите другую цифру для переключения на другое движение', x, y);
+    } else {
+        text('=== СИСТЕМА ДВИЖЕНИЙ ===', x, y);
+        y += lineHeight;
+        text('Нажмите 1-9 для редактирования движения', x, y);
+        y += lineHeight;
+        text('Нажмите Shift+1-9 для применения движения', x, y);
+        y += lineHeight;
+        
+        // Показываем сохраненные движения
+        for (let i = 0; i < movements.length; i++) {
+            const status = movements[i] ? 'Сохранено' : 'Пусто';
+            text(`Движение ${i + 1}: ${status}`, x, y);
+            y += lineHeight;
+        }
+    }
+
+    pop();
+}
+
+// Отображение статуса редактирования движения (всегда видимый)
+function drawMovementStatus() {
+    if (!isEditingMovement) return;
+    
+    push();
+    
+    // Настройки текста
+    textAlign(CENTER, TOP);
+    textSize(16);
+    fill(255, 255, 0); // Желтый цвет для выделения
+    stroke(0, 0, 0);
+    strokeWeight(2);
+    
+    // Позиция отображения (центр сверху)
+    let x = width / 2;
+    let y = 20;
+    
+    // Отображаем статус редактирования
+    text(`Редактирование движения ${editingMovementIndex + 1}`, x, y);
+    y += 25;
+    
+    textSize(12);
+    text('Измените позу скелета и нажмите ту же клавишу для сохранения', x, y);
+    y += 20;
+    text('Или нажмите другую цифру для переключения на другое движение', x, y);
+    y += 20;
+    text('Shift + цифра = применить движение', x, y);
+    
     pop();
 }
 
@@ -497,69 +564,69 @@ function drawDebugInfo() {
 function handleKeyDown(event) {
     const angleSpeed = 3; // Скорость поворота
 
-    // Управление танцем
-    switch (event.key.toLowerCase()) {
-        case 'q':
+    // Управление танцем (используем event.code для независимости от раскладки)
+    switch (event.code) {
+        case 'KeyQ':
             // Сброс до начального состояния
             event.preventDefault();
             skeleton.reset();
             break;
 
-        case 'w':
+        case 'KeyW':
             // Включение режима отладки
             event.preventDefault();
             toggleDebugMode();
             break;
 
-        case 'c':
+        case 'KeyC':
             // Правая голень наружу
             event.preventDefault();
             skeleton.state.rightShinAngle += angleSpeed;
             break;
 
-        case 'v':
+        case 'KeyV':
             // Правая голень внутрь
             event.preventDefault();
             skeleton.state.rightShinAngle -= angleSpeed;
             break;
 
-        case 'n':
+        case 'KeyN':
             // Левая голень внутрь
             event.preventDefault();
             skeleton.state.leftShinAngle += angleSpeed;
             break;
 
-        case 'm':
+        case 'KeyM':
             // Левая голень наружу
             event.preventDefault();
             skeleton.state.leftShinAngle -= angleSpeed;
             break;
 
-        case 'd':
+        case 'KeyD':
             // Правое бедро наружу
             event.preventDefault();
             skeleton.state.rightThighAngle += angleSpeed;
             break;
 
-        case 'f':
+        case 'KeyF':
             // Правое бедро внутрь
             event.preventDefault();
             skeleton.state.rightThighAngle -= angleSpeed;
             break;
 
-        case 'j':
+        case 'KeyJ':
             // Левое бедро внутрь
             event.preventDefault();
             skeleton.state.leftThighAngle += angleSpeed;
             break;
 
-        case 'k':
+        case 'KeyK':
             // Левое бедро наружу
             event.preventDefault();
             skeleton.state.leftThighAngle -= angleSpeed;
             break;
 
-        case 'g':
+        case 'KeyG':
             // Туловище наклон вправо
             event.preventDefault();
             skeleton.state.spineAngle -= angleSpeed;
@@ -568,7 +635,7 @@ function handleKeyDown(event) {
             skeleton.state.rightThighAngle += angleSpeed;
             break;
 
-        case 'h':
+        case 'KeyH':
             // Туловище наклон влево
             event.preventDefault();
             skeleton.state.spineAngle += angleSpeed;
@@ -577,99 +644,206 @@ function handleKeyDown(event) {
             skeleton.state.rightThighAngle -= angleSpeed;
             break;
 
-        case '[':
+        case 'BracketLeft':
             // Шея влево
             event.preventDefault();
             skeleton.state.neckAngle -= angleSpeed;
             break;
 
-        case ']':
+        case 'BracketRight':
             // Шея вправо
             event.preventDefault();
             skeleton.state.neckAngle += angleSpeed;
             break;
 
-        case 'e':
+        case 'KeyE':
             // Правое плечо вниз
             event.preventDefault();
             skeleton.state.rightUpperArmAngle += angleSpeed;
             break;
 
-        case 'r':
+        case 'KeyR':
             // Правое плечо вверх
             event.preventDefault();
             skeleton.state.rightUpperArmAngle -= angleSpeed;
             break;
 
-        case 'u':
+        case 'KeyU':
             // Левое плечо вверх
             event.preventDefault();
             skeleton.state.leftUpperArmAngle += angleSpeed;
             break;
 
-        case 'i':
+        case 'KeyI':
             // Левое плечо вниз
             event.preventDefault();
             skeleton.state.leftUpperArmAngle -= angleSpeed;
             break;
 
-        case 's':
+        case 'KeyS':
             // Правое плечо вниз
             event.preventDefault();
             skeleton.state.rightForearmAngle -= angleSpeed;
             break;
-        case 'a':
+        case 'KeyA':
             // Правое плечо вверх
             event.preventDefault();
             skeleton.state.rightForearmAngle += angleSpeed;
             break;
-        case 'l':
+        case 'KeyL':
             // Левое плечо вверх
             event.preventDefault();
             skeleton.state.leftForearmAngle += angleSpeed;
             break;
-        case ';':
+        case 'Semicolon':
             // Левое плечо вниз
             event.preventDefault();
             skeleton.state.leftForearmAngle -= angleSpeed;
             break;
 
-        case 'x':
+        case 'KeyX':
             // Правое плечо вниз
             event.preventDefault();
             skeleton.state.rightShoulderAngle -= angleSpeed;
             break;
-        case 'z':
+        case 'KeyZ':
             // Правое плечо вверх
             event.preventDefault();
             skeleton.state.rightShoulderAngle += angleSpeed;
             break;
-        case ',':
+        case 'Comma':
             // Левое плечо вверх
             event.preventDefault();
             skeleton.state.leftShoulderAngle += angleSpeed;
             break;
-        case '.':
+        case 'Period':
             // Левое плечо вниз
             event.preventDefault();
             skeleton.state.leftShoulderAngle -= angleSpeed;
             break;
             
-        case '`':
+        case 'Backquote':
             // Измерение длительности бита
             event.preventDefault();
             handleBeatMeasurement();
             break;
+            
+        // Обработка клавиш 1-9 для системы движений
+        case 'Digit1':
+        case 'Digit2':
+        case 'Digit3':
+        case 'Digit4':
+        case 'Digit5':
+        case 'Digit6':
+        case 'Digit7':
+        case 'Digit8':
+        case 'Digit9':
+            event.preventDefault();
+            if (event.shiftKey) {
+                // Shift + цифра = применение движения
+                const movementIndex = parseInt(event.code.replace('Digit', '')) - 1;
+                applyMovement(movementIndex);
+            } else {
+                // Обычная цифра = редактирование движения
+                handleMovementKey(event.code);
+            }
+            break;
     }
 
     // Управление интерфейсом
-    if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    if (event.code === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
         event.preventDefault();
         toggleFullscreen();
-    } else if (event.key === 'Escape' && isFullscreen) {
+    } else if (event.code === 'Escape' && isFullscreen) {
         event.preventDefault();
         exitFullscreen();
     }
+}
+
+// Обработка клавиш движений (1-9)
+function handleMovementKey(keyCode) {
+    const movementIndex = parseInt(keyCode.replace('Digit', '')) - 1; // 0-8 для клавиш 1-9
+    
+    if (isEditingMovement) {
+        if (editingMovementIndex === movementIndex) {
+            // Сохраняем движение и выходим из режима редактирования
+            saveMovement(movementIndex);
+            exitMovementEditing();
+        } else {
+            // Переключаемся на другое движение
+            exitMovementEditing();
+            startMovementEditing(movementIndex);
+        }
+    } else {
+        // Входим в режим редактирования
+        startMovementEditing(movementIndex);
+    }
+}
+
+// Начало редактирования движения
+function startMovementEditing(movementIndex) {
+    isEditingMovement = true;
+    editingMovementIndex = movementIndex;
+    
+    // Сохраняем текущее состояние как базовое
+    baseState = JSON.parse(JSON.stringify(skeleton.state));
+    
+    console.log(`Начато редактирование движения ${movementIndex + 1}`);
+}
+
+// Выход из режима редактирования движения
+function exitMovementEditing() {
+    isEditingMovement = false;
+    editingMovementIndex = -1;
+    baseState = null;
+    
+    console.log('Редактирование движения завершено');
+}
+
+// Сохранение движения как дельты состояния
+function saveMovement(movementIndex) {
+    if (!baseState) return;
+    
+    // Вычисляем дельту между текущим состоянием и базовым
+    const delta = calculateStateDelta(baseState, skeleton.state);
+    
+    // Сохраняем движение
+    movements[movementIndex] = delta;
+    
+    console.log(`Движение ${movementIndex + 1} сохранено:`, delta);
+}
+
+// Вычисление дельты между двумя состояниями
+function calculateStateDelta(baseState, currentState) {
+    const delta = {};
+    
+    // Вычисляем разности для всех полей состояния
+    for (const key in baseState) {
+        if (baseState.hasOwnProperty(key)) {
+            delta[key] = currentState[key] - baseState[key];
+        }
+    }
+    
+    return delta;
+}
+
+// Применение движения к текущему состоянию
+function applyMovement(movementIndex) {
+    if (movements[movementIndex] === null) {
+        console.log(`Движение ${movementIndex + 1} не найдено`);
+        return;
+    }
+    
+    const delta = movements[movementIndex];
+    
+    // Применяем дельту к текущему состоянию
+    for (const key in delta) {
+        if (skeleton.state.hasOwnProperty(key)) {
+            skeleton.state[key] += delta[key];
+        }
+    }
+    
+    console.log(`Применено движение ${movementIndex + 1}`);
 }
 
 // Обработка измерения длительности бита
@@ -696,7 +870,7 @@ function handleBeatMeasurement() {
 
 // Обработка отпускания клавиш
 function handleKeyUp(event) {
-    if (event.key === '`') {
+    if (event.code === 'Backquote') {
         // Сбрасываем визуальный индикатор
         isBeatKeyPressed = false;
     }
